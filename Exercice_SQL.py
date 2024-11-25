@@ -42,18 +42,21 @@ CREATE TABLE levels (
 create_requirements_table = """
 CREATE TABLE requirements (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    level TEXT,
-    row TEXT,
-    column TEXT,
-    seat TEXT
+    student_id INTEGER, -- l'élève concerné
+    preferred_level TEXT, -- Niveau souhaité
+    preferred_seat TEXT, -- Préférence de placement
+    FOREIGN KEY (student_id) REFERENCES students (id)
 );
 """
+
 create_desks_table = """
 CREATE TABLE desks (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    row INTEGER,
-    column INTEGER,
-    seat INTEGER
+    row INTEGER NOT NULL,
+    column_num INTEGER NOT NULL,
+    seat TEXT NOT NULL, -- Position (gauche ou droite)
+    student_id INTEGER, -- L'élève qui occupe le bureau
+    FOREIGN KEY (student_id) REFERENCES students (id)
 );
 """
 
@@ -84,20 +87,20 @@ VALUES
 #Pas clair sur comment compléter ces deux tables, est-ce que je dois les décortiquer en d'autres tables ?
 create_requirements = """
 INSERT INTO
-    requirements (level, row, column, seat)
+    requirements (student_id, preferred_level, preferred_seat)
 VALUES
-    ('good', 'A', '1', 'left'),
-    ('medium', 'B', '2', 'right'),
-    ('bad', 'C', '3', 'middle');
+    (1, 'good', 'left'),
+    (2, 'medium', 'right'),
+    (3, 'bad', 'left');
 """
 
 create_desks = """
 INSERT INTO
-    desks (row, column, seat)
+    desks (row, column_num, seat, student_id)
 VALUES
-    (1, 1, 1),
-    (1, 2, 1),
-    (2, 1, 1);
+    (1, 1, 'right', 1),
+    (1, 2, 'left', 2),
+    (2, 1, 'right');
 """
 
 
@@ -111,13 +114,13 @@ execute_query(connection, create_desks)
 #Fonction pour simplifier : This function accepts the connection object and the SELECT query and returns the selected record.
 def execute_read_query(connection, query):
     cursor = connection.cursor()
-    result = None
     try:
         cursor.execute(query)
         result = cursor.fetchall()
         return result
     except Error as e:
         print(f"The error '{e}' occurred")
+        return None
 
 
 select_students = "SELECT * FROM students"
@@ -144,6 +147,19 @@ WHERE
 """
 
 execute_query(connection, update_students)
+
+#Assigner un élève à un bureau
+update_desks = """
+UPDATE 
+    desks
+SET
+    student_id = 1
+WHERE
+    id = 1
+"""
+
+execute_query(connection, update_desks)
+
 
 #Lier 2 tables ensemble (relationnel) : table intermédiaire qui associe les élèves (students) aux niveaux (levels)
 #Les FOREIGN KEY permettent de relier les identifiants des étudiants (students.id) et des niveaux (levels.id).
@@ -189,5 +205,50 @@ students_with_levels = execute_read_query(connection, select_students_with_level
 
 for student in students_with_levels:
     print(student)
+
+#supprimer une table
+drop_desks_table = """
+DROP TABLE IF EXISTS desks;
+"""
+execute_query(connection, drop_desks_table)
+
+#recréer une table
+create_desks_table = """
+CREATE TABLE desks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    row INTEGER NOT NULL,
+    column_num INTEGER NOT NULL,
+    seat TEXT NOT NULL,
+    student_id INTEGER,
+    FOREIGN KEY (student_id) REFERENCES students (id)
+);
+"""
+execute_query(connection, create_desks_table)
+
+create_desks = """
+INSERT INTO
+    desks (row, column_num, seat, student_id)
+VALUES
+    (1, 1, 'right', 1),
+    (1, 2, 'left', 2),
+    (2, 1, 'right', NULL);
+"""
+execute_query(connection, create_desks)
+
+#Requête pour récupérer la configuration complète des élèves et leur bureau.
+select_students_with_desks = """
+SELECT
+    students.first_name, students.name, desks.row, desks.column_num, desks.seat
+FROM
+    desks
+LEFT JOIN -- permet de combiner les données de 2 tables, inclut tous les bureaux même si aucun élève n'y est assigné.
+    students ON desks.student_id = students.id;
+"""
+
+students_with_desks = execute_read_query(connection, select_students_with_desks)
+
+
+for desk in students_with_desks:
+    print(desk)
 
 
